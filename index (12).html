@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>스탬프 투어</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  /* ── 리셋 & 기본 ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --green: #1D9E75;
+    --green-dark: #0F6E56;
+    --green-light: #E1F5EE;
+    --blue: #378ADD;
+    --blue-light: #E6F1FB;
+    --red-light: #FCEBEB;
+    --red: #A32D2D;
+    --amber-light: #FAEEDA;
+    --amber: #854F0B;
+    --purple-light: #EEEDFE;
+    --purple: #534AB7;
+    --bg: #F5F5F3;
+    --surface: #FFFFFF;
+    --border: rgba(0,0,0,0.1);
+    --border-md: rgba(0,0,0,0.18);
+    --text: #1a1a1a;
+    --text-sub: #6b6b6b;
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+  body { font-family: -apple-system, 'Pretendard', 'Apple SD Gothic Neo', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* ── 레이아웃 ── */
+  .app { max-width: 480px; margin: 0 auto; padding: 1rem 1rem 5rem; }
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  /* ── 하단 네비 ── */
+  .bottom-nav {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--surface); border-top: 0.5px solid var(--border);
+    display: flex; max-width: 480px; margin: 0 auto;
+    left: 50%; transform: translateX(-50%); width: 100%;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .nav-btn {
+    flex: 1; padding: 10px 4px 8px; border: none; background: transparent;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    font-size: 10px; color: var(--text-sub); cursor: pointer; transition: color .2s;
+  }
+  .nav-btn svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+  .nav-btn.active { color: var(--green); }
+
+  /* ── 카드 ── */
+  .card {
+    background: var(--surface); border: 0.5px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem; margin-bottom: 1rem;
+  }
+  h2 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  .sub { font-size: 13px; color: var(--text-sub); margin-bottom: 1.25rem; line-height: 1.5; }
+
+  /* ── 폼 요소 ── */
+  .field-label { font-size: 13px; color: var(--text-sub); display: block; margin-bottom: 5px; font-weight: 500; }
+  .field { margin-bottom: 14px; }
+  input[type=text], input[type=tel], select {
+    width: 100%; padding: 11px 13px; border: 0.5px solid var(--border-md);
+    border-radius: var(--radius-sm); font-size: 15px; background: var(--surface);
+    color: var(--text); outline: none; transition: border-color .2s;
+  }
+  input:focus, select:focus { border-color: var(--green); }
+
+  /* ── 성별 라디오 ── */
+  .radio-group { display: flex; gap: 8px; }
+  .radio-label {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    gap: 6px; padding: 10px; border: 0.5px solid var(--border-md);
+    border-radius: var(--radius-sm); cursor: pointer; font-size: 14px;
+    font-weight: 500; transition: all .2s;
+  }
+  .radio-label input { display: none; }
+  .radio-label.checked { border-color: var(--blue); background: var(--blue-light); color: var(--blue); }
+
+  /* ── 교급 그리드 ── */
+  .grade-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+  .grade-btn {
+    padding: 11px 4px; border: 0.5px solid var(--border-md); border-radius: var(--radius-sm);
+    background: transparent; font-size: 13px; font-weight: 500; cursor: pointer;
+    color: var(--text-sub); transition: all .2s; text-align: center;
+  }
+  .grade-btn.selected { border-color: var(--green); background: var(--green-light); color: var(--green-dark); }
+
+  /* ── 버튼 ── */
+  .btn-primary {
+    width: 100%; padding: 13px; background: var(--green); color: white;
+    border: none; border-radius: var(--radius-sm); font-size: 15px;
+    font-weight: 600; cursor: pointer; transition: opacity .2s;
+  }
+  .btn-primary:hover { opacity: .9; }
+  .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-secondary {
+    width: 100%; padding: 12px; background: transparent; color: var(--text-sub);
+    border: 0.5px solid var(--border-md); border-radius: var(--radius-sm);
+    font-size: 14px; cursor: pointer; margin-top: 8px;
+  }
+  .btn-blue { background: var(--blue); }
+
+  /* ── 회원 카드 ── */
+  .member-hero {
+    background: linear-gradient(135deg, var(--green), var(--green-dark));
+    color: white; border-radius: var(--radius); padding: 1.75rem;
+    text-align: center; margin-bottom: 1rem;
+  }
+  .member-no { font-size: 52px; font-weight: 700; letter-spacing: 10px; margin: 10px 0; }
+  .member-name { font-size: 15px; opacity: .85; }
+
+  /* ── 스탬프 그리드 ── */
+  .stamp-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin: 1rem 0; }
+  .stamp-cell {
+    aspect-ratio: 1; border: 1.5px solid var(--border-md); border-radius: var(--radius-sm);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3px; font-size: 10px; color: var(--text-sub); transition: all .3s;
+  }
+  .stamp-cell .icon { font-size: 20px; }
+  .stamp-cell.done { border-color: var(--green); background: var(--green-light); color: var(--green-dark); }
+
+  /* ── 부스 목록 ── */
+  .booth-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px; border: 0.5px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--surface); margin-bottom: 8px;
+  }
+  .booth-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border-md); margin-right: 10px; flex-shrink: 0; }
+  .booth-dot.done { background: var(--green); }
+  .booth-name-txt { font-size: 14px; font-weight: 500; }
+  .booth-status-txt { font-size: 12px; color: var(--text-sub); }
+  .btn-stamp {
+    padding: 6px 14px; border: 0.5px solid var(--blue); background: var(--blue-light);
+    color: var(--blue); border-radius: var(--radius-sm); font-size: 12px;
+    font-weight: 600; cursor: pointer; white-space: nowrap;
+  }
+  .badge-done {
+    font-size: 11px; padding: 4px 10px; border-radius: 20px;
+    background: var(--green-light); color: var(--green-dark); font-weight: 600;
+  }
+
+  /* ── 조회 바 ── */
+  .lookup-row { display: flex; gap: 8px; }
+  .lookup-row input { flex: 1; margin: 0; letter-spacing: 5px; font-size: 18px; font-weight: 600; text-align: center; }
+  .lookup-row button {
+    padding: 0 18px; border: 0.5px solid var(--border-md); background: var(--bg);
+    border-radius: var(--radius-sm); font-size: 13px; cursor: pointer; color: var(--text); white-space: nowrap;
+  }
+
+  /* ── 관리자 통계 ── */
+  .stats-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 1rem; }
+  .stat-box { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-sm); padding: 12px; text-align: center; }
+  .stat-val { font-size: 24px; font-weight: 700; }
+  .stat-lbl { font-size: 11px; color: var(--text-sub); margin-top: 2px; }
+
+  /* ── 테이블 ── */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 500px; }
+  th { text-align: left; font-weight: 600; color: var(--text-sub); padding: 8px 8px; border-bottom: 1px solid var(--border); font-size: 11px; white-space: nowrap; }
+  td { padding: 9px 8px; border-bottom: 0.5px solid var(--border); white-space: nowrap; }
+  .progress-bar { height: 5px; background: var(--bg); border-radius: 3px; overflow: hidden; min-width: 50px; display: inline-block; vertical-align: middle; }
+  .progress-fill { height: 100%; background: var(--green); border-radius: 3px; }
+
+  /* ── 태그 ── */
+  .tag { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 20px; font-weight: 600; }
+  .tag-male { background: var(--blue-light); color: #185FA5; }
+  .tag-female { background: #FBEAF0; color: #993556; }
+  .tag-유아 { background: var(--amber-light); color: var(--amber); }
+  .tag-초 { background: #EAF3DE; color: #3B6D11; }
+  .tag-중 { background: var(--purple-light); color: var(--purple); }
+  .tag-고 { background: var(--green-light); color: var(--green-dark); }
+  .tag-대 { background: var(--blue-light); color: #185FA5; }
+  .tag-성인 { background: var(--red-light); color: var(--red); }
+
+  /* ── 내보내기 버튼 ── */
+  .export-btn {
+    display: flex; align-items: center; gap: 6px; padding: 8px 14px;
+    border: 0.5px solid var(--border-md); border-radius: var(--radius-sm);
+    background: var(--bg); font-size: 13px; cursor: pointer; color: var(--text);
+  }
+
+  /* ── 모달 ── */
+  .modal-bg {
+    position: fixed; inset: 0; background: rgba(0,0,0,.5);
+    display: flex; align-items: flex-end; justify-content: center; z-index: 200;
+  }
+  .modal {
+    background: var(--surface); border-radius: 20px 20px 0 0;
+    padding: 1.75rem 1.5rem; width: 100%; max-width: 480px; text-align: center;
+  }
+  .modal-title { font-size: 17px; font-weight: 600; margin-bottom: 6px; }
+  .modal-hint { font-size: 13px; color: var(--text-sub); margin-bottom: 1rem; }
+  .modal-no {
+    font-size: 36px; font-weight: 700; letter-spacing: 8px; margin: 1rem 0;
+    padding: 14px; border: 0.5px solid var(--border-md); border-radius: var(--radius-sm); background: var(--bg);
+  }
+  .modal-btns { display: flex; gap: 8px; margin-top: 1rem; }
+  .modal-btns button { flex: 1; padding: 13px; border-radius: var(--radius-sm); font-size: 14px; cursor: pointer; font-weight: 600; }
+  .btn-cancel { border: 0.5px solid var(--border-md); background: transparent; color: var(--text-sub); }
+  .btn-confirm { border: none; background: var(--green); color: white; }
+  .success-msg {
+    background: var(--green-light); color: var(--green-dark); border: 0.5px solid #5DCAA5;
+    border-radius: var(--radius-sm); padding: 13px; text-align: center;
+    font-size: 14px; font-weight: 600; margin-top: 8px;
+  }
+
+  /* ── 토스트 ── */
+  .toast {
+    position: fixed; top: 1rem; left: 50%; transform: translateX(-50%);
+    background: #1a1a1a; color: white; padding: 10px 20px; border-radius: 20px;
+    font-size: 13px; z-index: 300; opacity: 0; transition: opacity .3s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+
+  /* ── 로딩 ── */
+  .loading { text-align: center; padding: 2rem; color: var(--text-sub); font-size: 14px; }
+  .spinner {
+    width: 28px; height: 28px; border: 2.5px solid var(--border); border-top-color: var(--green);
+    border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── 설정 안내 박스 ── */
+  .setup-box {
+    background: #fff8e1; border: 1px solid #ffe082; border-radius: var(--radius-sm);
+    padding: 1rem; margin-bottom: 1rem; font-size: 13px; line-height: 1.7;
+  }
+  .setup-box code {
+    background: rgba(0,0,0,.06); padding: 1px 5px; border-radius: 4px;
+    font-family: monospace; font-size: 12px;
+  }
+
+  /* ── 프로필 행 ── */
+  .profile-row { display: flex; align-items: center; gap: 12px; margin-bottom: 1rem; }
+  .avatar {
+    width: 42px; height: 42px; border-radius: 50%; background: var(--green-light);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: var(--green-dark); flex-shrink: 0;
+  }
+  .profile-name { font-size: 15px; font-weight: 600; }
+  .profile-info { font-size: 12px; color: var(--text-sub); margin-top: 2px; }
+  .count-badge { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--green-dark); }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════
+     ⚙️  SUPABASE 설정 — 여기만 바꾸면 됩니다
+     ══════════════════════════════════════════ -->
+<script>
+  const SUPABASE_URL = 'YOUR_SUPABASE_URL';       // 예: https://xxxx.supabase.co
+  const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // 예: eyJhbG...
+</script>
+<!-- ══════════════════════════════════════════ -->
+
+<!-- 토스트 -->
+<div class="toast" id="toast"></div>
+
+<!-- 앱 -->
+<div class="app">
+
+  <!-- ── 방명록 화면 ── -->
+  <div id="screen-register" class="screen active">
+    <div id="setup-warning" class="setup-box" style="display:none">
+      ⚠️ <strong>Supabase 연결 필요</strong><br>
+      이 파일 상단의 <code>SUPABASE_URL</code>과 <code>SUPABASE_ANON_KEY</code>를 입력해 주세요.<br>
+      연결 전에도 데모로 사용할 수 있습니다.
+    </div>
+
+    <div id="register-form">
+      <div class="card">
+        <h2>디지털 방명록</h2>
+        <p class="sub">정보를 입력하면 스탬프 회원번호가 발급됩니다</p>
+
+        <div class="field">
+          <label class="field-label">이름</label>
+          <input type="text" id="reg-name" placeholder="이름을 입력해 주세요" autocomplete="off">
+        </div>
+
+        <div class="field">
+          <label class="field-label">연락처</label>
+          <input type="tel" id="reg-tel" placeholder="010-0000-0000" maxlength="13" oninput="fmtTel(this)">
+        </div>
+
+        <div class="field">
+          <label class="field-label">성별</label>
+          <div class="radio-group">
+            <label class="radio-label checked" id="lbl-male" onclick="selectGender('남')">
+              <input type="radio" name="gender" value="남" checked> 남성
+            </label>
+            <label class="radio-label" id="lbl-female" onclick="selectGender('여')">
+              <input type="radio" name="gender" value="여"> 여성
+            </label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label">교급</label>
+          <div class="grade-grid">
+            <button class="grade-btn" onclick="selectGrade('유아')">유아</button>
+            <button class="grade-btn" onclick="selectGrade('초')">초등학생</button>
+            <button class="grade-btn" onclick="selectGrade('중')">중학생</button>
+            <button class="grade-btn" onclick="selectGrade('고')">고등학생</button>
+            <button class="grade-btn" onclick="selectGrade('대')">대학생</button>
+            <button class="grade-btn" onclick="selectGrade('성인')">성인</button>
+          </div>
+        </div>
+
+        <button class="btn-primary" onclick="doRegister()" id="reg-btn">방명록 작성 완료</button>
+      </div>
+    </div>
+
+    <div id="register-result" style="display:none">
+      <div class="member-hero">
+        <div style="font-size:13px;opacity:.75;margin-bottom:4px">회원번호가 발급되었습니다</div>
+        <div class="member-no" id="result-no">0000</div>
+        <div class="member-name" id="result-name">홍길동 님</div>
+      </div>
+      <div class="card">
+        <p style="font-size:14px;color:var(--text-sub);line-height:1.7">
+          ⚠️ 회원번호를 반드시 기억하거나 메모해 주세요.<br>
+          분실 시 스탬프 기록을 찾기 어렵습니다.
+        </p>
+      </div>
+      <button class="btn-primary btn-blue" onclick="goToStamp()">스탬프 적립하러 가기</button>
+      <button class="btn-secondary" onclick="resetRegister()">다른 사람 등록하기</button>
+    </div>
+  </div>
+
+  <!-- ── 스탬프 화면 ── -->
+  <div id="screen-stamp" class="screen">
+    <div class="card">
+      <h2>스탬프 적립</h2>
+      <p class="sub">회원번호를 입력하고 각 부스에서 스탬프를 받으세요</p>
+      <div class="lookup-row">
+        <input type="text" id="stamp-no" placeholder="회원번호 4자리" maxlength="4">
+        <button onclick="loadMember()">조회</button>
+      </div>
+    </div>
+
+    <div id="stamp-loading" class="loading" style="display:none">
+      <div class="spinner"></div>조회 중...
+    </div>
+
+    <div id="stamp-area" style="display:none">
+      <div class="card" style="border-color:var(--green)">
+        <div class="profile-row">
+          <div class="avatar" id="s-avatar">홍</div>
+          <div>
+            <div class="profile-name" id="s-name">홍길동</div>
+            <div class="profile-info" id="s-info"></div>
+          </div>
+          <div class="count-badge" id="s-count">0/8 완료</div>
+        </div>
+        <div class="stamp-grid" id="stamp-grid"></div>
+      </div>
+
+      <div class="card">
+        <h2 style="font-size:15px;margin-bottom:12px">부스 스탬프 적립</h2>
+        <div id="booth-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 관리자 화면 ── -->
+  <div id="screen-admin" class="screen">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <div>
+        <h2 style="margin:0">관리자 현황판</h2>
+        <div style="font-size:12px;color:var(--text-sub);margin-top:2px" id="admin-time"></div>
+      </div>
+      <button class="export-btn" onclick="exportCSV()">
+        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
+        엑셀 내보내기
+      </button>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-box"><div class="stat-val" id="stat-total">0</div><div class="stat-lbl">총 참여자</div></div>
+      <div class="stat-box"><div class="stat-val" id="stat-stamps">0</div><div class="stat-lbl">총 스탬프</div></div>
+      <div class="stat-box"><div class="stat-val" id="stat-complete">0</div><div class="stat-lbl">완주자</div></div>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size:15px;margin-bottom:12px">참여자 명단</h2>
+      <div id="admin-loading" class="loading"><div class="spinner"></div>불러오는 중...</div>
+      <div class="table-wrap" id="admin-table-wrap" style="display:none">
+        <table>
+          <thead>
+            <tr>
+              <th>번호</th><th>이름</th><th>연락처</th><th>성별</th><th>교급</th><th>등록시간</th><th>스탬프</th>
+            </tr>
+          </thead>
+          <tbody id="admin-table"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 하단 네비 -->
+<nav class="bottom-nav">
+  <button class="nav-btn active" onclick="showScreen('register',this)">
+    <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+    방명록
+  </button>
+  <button class="nav-btn" onclick="showScreen('stamp',this)">
+    <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+    스탬프
+  </button>
+  <button class="nav-btn" onclick="showScreen('admin',this)">
+    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+    관리자
+  </button>
+</nav>
+
+<!-- 스탬프 적립 모달 -->
+<div id="stamp-modal" class="modal-bg" style="display:none" onclick="handleModalBgClick(event)">
+  <div class="modal">
+    <div class="modal-title" id="modal-booth-name"></div>
+    <p class="modal-hint">부스 QR 스캔 후 회원번호를 확인하고 적립 완료를 눌러주세요</p>
+    <div class="modal-no" id="modal-no">1234</div>
+    <div class="success-msg" id="modal-success" style="display:none">✅ 스탬프가 적립되었습니다!</div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal()">취소</button>
+      <button class="btn-confirm" id="modal-confirm-btn" onclick="confirmStamp()">적립 완료</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+// 부스 목록 — 여기서 이름/아이콘 수정 가능
+// ══════════════════════════════════════════
+const BOOTHS = [
+  { id: 1, name: '과학탐구 부스', icon: '🔬' },
+  { id: 2, name: '수학놀이 부스', icon: '📐' },
+  { id: 3, name: '역사체험 부스', icon: '🏛️' },
+  { id: 4, name: '환경사랑 부스', icon: '🌿' },
+  { id: 5, name: '미래직업 부스', icon: '🚀' },
+  { id: 6, name: '예술창작 부스', icon: '🎨' },
+  { id: 7, name: '체육활동 부스', icon: '⚽' },
+  { id: 8, name: '도서문화 부스', icon: '📚' },
+];
+
+const GRADE_LABEL = { 유아:'유아', 초:'초등학생', 중:'중학생', 고:'고등학생', 대:'대학생', 성인:'성인' };
+
+// ── Supabase 초기화 ──
+let db = null;
+let isConnected = false;
+
+function initSupabase() {
+  if (SUPABASE_URL === 'YOUR_SUPABASE_URL') {
+    document.getElementById('setup-warning').style.display = 'block';
+    return;
+  }
+  try {
+    db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    isConnected = true;
+  } catch(e) {
+    showToast('Supabase 연결 실패. 데모 모드로 실행합니다.');
+  }
+}
+
+// ── 로컬 fallback (Supabase 미연결 시) ──
+let localMembers = {};
+
+// ── 유틸 ──
+function showToast(msg, dur = 2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+
+function fmtTel(el) {
+  let v = el.value.replace(/\D/g, '');
+  if (v.length <= 3) el.value = v;
+  else if (v.length <= 7) el.value = v.slice(0,3) + '-' + v.slice(3);
+  else el.value = v.slice(0,3) + '-' + v.slice(3,7) + '-' + v.slice(7,11);
+}
+
+function genNo() {
+  const existing = Object.keys(localMembers);
+  let n;
+  do { n = String(Math.floor(1000 + Math.random() * 9000)); } while (existing.includes(n));
+  return n;
+}
+
+// ── 화면 전환 ──
+function showScreen(id, btn) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('screen-' + id).classList.add('active');
+  btn.classList.add('active');
+  if (id === 'admin') loadAdmin();
+}
+
+// ── 성별 선택 ──
+let selectedGender = '남';
+function selectGender(g) {
+  selectedGender = g;
+  document.getElementById('lbl-male').classList.toggle('checked', g === '남');
+  document.getElementById('lbl-female').classList.toggle('checked', g === '여');
+}
+
+// ── 교급 선택 ──
+let selectedGrade = '';
+function selectGrade(g) {
+  selectedGrade = g;
+  document.querySelectorAll('.grade-btn').forEach(b => {
+    b.classList.toggle('selected', b.textContent === (GRADE_LABEL[g] || g));
+  });
+}
+
+// ── 방명록 등록 ──
+async function doRegister() {
+  const name = document.getElementById('reg-name').value.trim();
+  const tel  = document.getElementById('reg-tel').value.trim();
+  if (!name) { showToast('이름을 입력해 주세요'); return; }
+  if (!tel)  { showToast('연락처를 입력해 주세요'); return; }
+  if (!selectedGrade) { showToast('교급을 선택해 주세요'); return; }
+
+  const btn = document.getElementById('reg-btn');
+  btn.disabled = true;
+  btn.textContent = '등록 중...';
+
+  const no = genNo();
+  const now = new Date().toLocaleString('ko-KR', { hour:'2-digit', minute:'2-digit' });
+  const member = { no, name, tel, gender: selectedGender, grade: selectedGrade, stamps: [], reg_time: now };
+
+  if (isConnected) {
+    const { error } = await db.from('members').insert({
+      no, name, tel, gender: selectedGender, grade: selectedGrade,
+      stamps: [], reg_time: new Date().toISOString()
+    });
+    if (error) {
+      showToast('저장 실패: ' + error.message);
+      btn.disabled = false; btn.textContent = '방명록 작성 완료';
+      return;
+    }
+  }
+  localMembers[no] = member;
+
+  document.getElementById('result-no').textContent = no;
+  document.getElementById('result-name').textContent = name + ' 님';
+  document.getElementById('register-form').style.display = 'none';
+  document.getElementById('register-result').style.display = 'block';
+  btn.disabled = false; btn.textContent = '방명록 작성 완료';
+}
+
+function resetRegister() {
+  document.getElementById('reg-name').value = '';
+  document.getElementById('reg-tel').value = '';
+  selectedGrade = '';
+  selectedGender = '남';
+  document.querySelectorAll('.grade-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('lbl-male').classList.add('checked');
+  document.getElementById('lbl-female').classList.remove('checked');
+  document.getElementById('register-form').style.display = 'block';
+  document.getElementById('register-result').style.display = 'none';
+}
+
+function goToStamp() {
+  const no = document.getElementById('result-no').textContent;
+  document.getElementById('stamp-no').value = no;
+  document.querySelectorAll('.nav-btn')[1].click();
+  loadMember();
+}
+
+// ── 스탬프 조회 ──
+let currentMember = null;
+
+async function loadMember() {
+  const no = document.getElementById('stamp-no').value.trim();
+  if (!no) return;
+
+  document.getElementById('stamp-loading').style.display = 'block';
+  document.getElementById('stamp-area').style.display = 'none';
+
+  let member = localMembers[no];
+
+  if (!member && isConnected) {
+    const { data, error } = await db.from('members').select('*').eq('no', no).single();
+    if (!error && data) {
+      member = { ...data, stamps: data.stamps || [] };
+      localMembers[no] = member;
+    }
+  }
+
+  document.getElementById('stamp-loading').style.display = 'none';
+
+  if (!member) {
+    showToast('회원번호를 찾을 수 없습니다. 방명록을 먼저 작성해 주세요.');
+    return;
+  }
+
+  currentMember = member;
+  document.getElementById('s-avatar').textContent = member.name[0];
+  document.getElementById('s-name').textContent = member.name;
+  document.getElementById('s-info').textContent =
+    member.gender + '성 · ' + GRADE_LABEL[member.grade] + ' · ' + member.tel + ' · #' + member.no;
+  document.getElementById('stamp-area').style.display = 'block';
+  renderStamps();
+}
+
+function renderStamps() {
+  const m = currentMember;
+  const stamps = m.stamps || [];
+  document.getElementById('s-count').textContent = stamps.length + '/' + BOOTHS.length + ' 완료';
+
+  document.getElementById('stamp-grid').innerHTML = BOOTHS.map(b => {
+    const done = stamps.includes(b.id);
+    return `<div class="stamp-cell ${done ? 'done' : ''}">
+      <span class="icon">${b.icon}</span>
+      <span>${b.name.replace(' 부스','')}</span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('booth-list').innerHTML = BOOTHS.map(b => {
+    const done = stamps.includes(b.id);
+    return `<div class="booth-item">
+      <div class="booth-dot ${done ? 'done' : ''}"></div>
+      <div style="flex:1">
+        <div class="booth-name-txt">${b.icon} ${b.name}</div>
+        <div class="booth-status-txt">${done ? '✓ 완료' : '미방문'}</div>
+      </div>
+      ${done
+        ? '<span class="badge-done">완료</span>'
+        : `<button class="btn-stamp" onclick="openModal(${b.id})">스캔 적립</button>`}
+    </div>`;
+  }).join('');
+}
+
+// ── 모달 ──
+let modalBooth = null;
+
+function openModal(boothId) {
+  modalBooth = BOOTHS.find(b => b.id === boothId);
+  document.getElementById('modal-booth-name').textContent = modalBooth.icon + ' ' + modalBooth.name;
+  document.getElementById('modal-no').textContent = currentMember.no;
+  document.getElementById('modal-success').style.display = 'none';
+  document.getElementById('modal-confirm-btn').style.display = 'block';
+  document.getElementById('stamp-modal').style.display = 'flex';
+}
+
+function closeModal() {
+  document.getElementById('stamp-modal').style.display = 'none';
+  modalBooth = null;
+}
+
+function handleModalBgClick(e) {
+  if (e.target === document.getElementById('stamp-modal')) closeModal();
+}
+
+async function confirmStamp() {
+  if (!currentMember || !modalBooth) return;
+  const stamps = currentMember.stamps || [];
+  if (stamps.includes(modalBooth.id)) { closeModal(); return; }
+
+  const newStamps = [...stamps, modalBooth.id];
+  currentMember.stamps = newStamps;
+  localMembers[currentMember.no] = currentMember;
+
+  if (isConnected) {
+    await db.from('members').update({ stamps: newStamps }).eq('no', currentMember.no);
+  }
+
+  document.getElementById('modal-success').style.display = 'block';
+  document.getElementById('modal-confirm-btn').style.display = 'none';
+  renderStamps();
+  setTimeout(closeModal, 1400);
+}
+
+// ── 관리자 ──
+async function loadAdmin() {
+  document.getElementById('admin-loading').style.display = 'block';
+  document.getElementById('admin-table-wrap').style.display = 'none';
+
+  let list = Object.values(localMembers);
+
+  if (isConnected) {
+    const { data, error } = await db.from('members').select('*').order('reg_time', { ascending: false });
+    if (!error && data) {
+      data.forEach(m => { if (!localMembers[m.no]) localMembers[m.no] = { ...m, stamps: m.stamps || [] }; });
+      list = data.map(m => ({ ...m, stamps: m.stamps || [] }));
+    }
+  }
+
+  document.getElementById('admin-loading').style.display = 'none';
+  document.getElementById('admin-table-wrap').style.display = 'block';
+
+  document.getElementById('stat-total').textContent = list.length;
+  document.getElementById('stat-stamps').textContent = list.reduce((a, m) => a + m.stamps.length, 0);
+  document.getElementById('stat-complete').textContent = list.filter(m => m.stamps.length === BOOTHS.length).length;
+  document.getElementById('admin-time').textContent = '최근 업데이트 ' + new Date().toLocaleTimeString('ko-KR', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+
+  const tbody = document.getElementById('admin-table');
+  tbody.innerHTML = list.length === 0
+    ? '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-sub)">등록된 참여자가 없습니다</td></tr>'
+    : list.map(m => {
+        const pct = Math.round(m.stamps.length / BOOTHS.length * 100);
+        const gc = m.gender === '남' ? 'male' : 'female';
+        const regTime = m.reg_time
+          ? (m.reg_time.includes('T') ? new Date(m.reg_time).toLocaleTimeString('ko-KR', { hour:'2-digit', minute:'2-digit' }) : m.reg_time)
+          : '-';
+        return `<tr>
+          <td style="font-weight:600;letter-spacing:2px">#${m.no}</td>
+          <td>${m.name}</td>
+          <td style="color:var(--text-sub)">${m.tel}</td>
+          <td><span class="tag tag-${gc}">${m.gender}</span></td>
+          <td><span class="tag tag-${m.grade}">${GRADE_LABEL[m.grade]}</span></td>
+          <td style="color:var(--text-sub)">${regTime}</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:6px">
+              <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+              <span style="font-size:11px;color:var(--text-sub)">${m.stamps.length}/${BOOTHS.length}</span>
+            </div>
+          </td>
+        </tr>`;
+      }).join('');
+}
+
+// ── 엑셀(CSV) 내보내기 ──
+function exportCSV() {
+  const list = Object.values(localMembers);
+  if (!list.length) { showToast('내보낼 데이터가 없습니다'); return; }
+  const boothHeaders = BOOTHS.map(b => b.name).join(',');
+  let csv = '\uFEFF회원번호,이름,연락처,성별,교급,등록시간,총스탬프,' + boothHeaders + '\n';
+  list.forEach(m => {
+    const boothCols = BOOTHS.map(b => (m.stamps || []).includes(b.id) ? 'O' : '').join(',');
+    const regTime = m.reg_time
+      ? (m.reg_time.includes('T') ? new Date(m.reg_time).toLocaleString('ko-KR') : m.reg_time)
+      : '-';
+    csv += `${m.no},${m.name},${m.tel},${m.gender}성,${GRADE_LABEL[m.grade]},${regTime},${m.stamps.length},${boothCols}\n`;
+  });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = '스탬프투어_명단_' + new Date().toLocaleDateString('ko-KR').replace(/[\. ]/g, '') + '.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ── 초기화 ──
+initSupabase();
+</script>
+</body>
+</html>
